@@ -1,5 +1,9 @@
 <?php
+
 namespace PortableInfobox\Parser;
+
+use MediaWiki\MediaWikiServices;
+use PortableInfoboxUtils;
 
 class MediaWikiParserService implements ExternalParser {
 
@@ -16,10 +20,14 @@ class MediaWikiParserService implements ExternalParser {
 		$this->frame = $frame;
 
 		if ( $wgPortableInfoboxUseTidy && class_exists( '\MediaWiki\Tidy\RemexDriver' ) ) {
-			$this->tidyDriver = \MWTidy::factory( [
-				'driver' => 'RemexHtml',
-				'pwrap' => false
-			] );
+			if ( version_compare( PortableInfoboxUtils::getMWVersion(), '1.36', '>=' ) ) {
+				$this->tidyDriver = MediaWikiServices::getInstance()->getTidy();
+			} else {
+				$this->tidyDriver = \MWTidy::factory( [
+					'driver' => 'RemexHtml',
+					'pwrap' => false
+				] );
+			}
 		}
 	}
 
@@ -35,7 +43,7 @@ class MediaWikiParserService implements ExternalParser {
 			return $this->cache[$wikitext];
 		}
 
-		$parsed = $this->parser->internalParse( $wikitext, false, $this->frame );
+		$parsed = $wikitext ? $this->parser->internalParse( $wikitext, false, $this->frame ) : null;
 		if ( in_array( substr( $parsed, 0, 1 ), [ '*', '#' ] ) ) {
 			//fix for first item list elements
 			$parsed = "\n" . $parsed;
@@ -66,9 +74,9 @@ class MediaWikiParserService implements ExternalParser {
 	 */
 	public function addImage( $title ) {
 		$file = wfFindFile( $title );
-		$tmstmp = $file ? $file->getTimestamp() : false;
-		$sha1 = $file ? $file->getSha1() : false;
-		$this->parser->getOutput()->addImage( $title, $tmstmp, $sha1 );
+		$tmstmp = $file ? $file->getTimestamp() : null;
+		$sha1 = $file ? $file->getSha1() : null;
+		$this->parser->getOutput()->addImage( $title->getDBkey(), $tmstmp, $sha1 );
 
 		// Pass PI images to PageImages extension if available (Popups and og:image)
 		if ( \method_exists(
